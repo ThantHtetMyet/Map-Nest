@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "113944616220",
+    "project_id": "map-nest",
+    "storage_bucket": "map-nest.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:113944616220:android:a2b440b595e09a6467eed9",
+        "android_client_info": {
+          "package_name": "com.map.nest"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC6dzpatIyb7dn2WewCwTQF48fiUOZjtnI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
