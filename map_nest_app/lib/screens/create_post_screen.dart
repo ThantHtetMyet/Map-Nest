@@ -289,10 +289,18 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       // Try multiple geocoding approaches for better postal code resolution
       List<dynamic>? data;
       
-      // Approach 1: Use postalcode parameter (most specific for postal codes)
+      // Clean postal code - remove spaces and handle Singapore format (S prefix)
+      String cleanPostalCode = postalCode.replaceAll(RegExp(r'[\s-]'), '');
+      // Remove 'S' prefix if present (Singapore format)
+      if (cleanPostalCode.toUpperCase().startsWith('S') && cleanPostalCode.length > 1) {
+        cleanPostalCode = cleanPostalCode.substring(1);
+      }
+      
+      // Approach 1: Use postalcode parameter with Singapore context
       try {
+        final encodedPostalCode = Uri.encodeComponent(cleanPostalCode);
         final url1 = Uri.parse(
-          'https://nominatim.openstreetmap.org/search?format=json&postalcode=$postalCode&limit=1',
+          'https://nominatim.openstreetmap.org/search?format=json&postalcode=$encodedPostalCode&countrycodes=sg&limit=5',
         );
         
         final response1 = await http.get(
@@ -312,12 +320,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         // Continue to next approach
       }
 
-      // Approach 2: If first approach failed, try with country context (Singapore/Malaysia/Myanmar)
+      // Approach 2: Try with "Singapore" in query
       if (data == null || data!.isEmpty) {
         try {
-          // Try with Singapore context (common postal code format)
+          final encodedQuery = Uri.encodeComponent('Singapore $cleanPostalCode');
           final url2 = Uri.parse(
-            'https://nominatim.openstreetmap.org/search?format=json&postalcode=$postalCode&countrycodes=sg,my,mm&limit=1',
+            'https://nominatim.openstreetmap.org/search?format=json&q=$encodedQuery&limit=5',
           );
           
           final response2 = await http.get(
@@ -330,7 +338,17 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           if (response2.statusCode == 200) {
             final List<dynamic> result2 = json.decode(response2.body);
             if (result2.isNotEmpty) {
-              data = result2;
+              // Filter for results that contain the postal code
+              final filtered = result2.where((item) {
+                final displayName = (item['display_name'] ?? '').toString();
+                return displayName.contains(cleanPostalCode) || 
+                       displayName.contains(postalCode);
+              }).toList();
+              if (filtered.isNotEmpty) {
+                data = filtered;
+              } else {
+                data = result2;
+              }
             }
           }
         } catch (e) {
@@ -338,11 +356,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         }
       }
 
-      // Approach 3: Fallback to general search query
+      // Approach 3: Try with original postal code format (with S prefix if it was there)
       if (data == null || data!.isEmpty) {
         try {
+          final encodedOriginal = Uri.encodeComponent(postalCode);
           final url3 = Uri.parse(
-            'https://nominatim.openstreetmap.org/search?format=json&q=$postalCode&limit=5',
+            'https://nominatim.openstreetmap.org/search?format=json&postalcode=$encodedOriginal&countrycodes=sg,my,mm&limit=5',
           );
           
           final response3 = await http.get(
@@ -354,16 +373,43 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
           if (response3.statusCode == 200) {
             final List<dynamic> result3 = json.decode(response3.body);
-            // Filter results to find ones that mention postal code
             if (result3.isNotEmpty) {
+              data = result3;
+            }
+          }
+        } catch (e) {
+          // Continue to next approach
+        }
+      }
+
+      // Approach 4: General search with postal code
+      if (data == null || data!.isEmpty) {
+        try {
+          final encodedSearch = Uri.encodeComponent('$postalCode Singapore');
+          final url4 = Uri.parse(
+            'https://nominatim.openstreetmap.org/search?format=json&q=$encodedSearch&limit=5',
+          );
+          
+          final response4 = await http.get(
+            url4,
+            headers: {
+              'User-Agent': 'MapNest App',
+            },
+          );
+
+          if (response4.statusCode == 200) {
+            final List<dynamic> result4 = json.decode(response4.body);
+            if (result4.isNotEmpty) {
               // Try to find a result that has postal code in address
-              final postalCodeMatch = result3.firstWhere(
+              final postalCodeMatch = result4.firstWhere(
                 (item) {
                   final displayName = (item['display_name'] ?? '').toString().toLowerCase();
                   final postalCodeLower = postalCode.toLowerCase();
-                  return displayName.contains(postalCodeLower);
+                  final cleanPostalCodeLower = cleanPostalCode.toLowerCase();
+                  return displayName.contains(postalCodeLower) || 
+                         displayName.contains(cleanPostalCodeLower);
                 },
-                orElse: () => result3[0], // Use first result if no match
+                orElse: () => result4[0], // Use first result if no match
               );
               data = [postalCodeMatch];
             }
