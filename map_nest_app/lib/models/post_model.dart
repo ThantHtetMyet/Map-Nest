@@ -16,6 +16,7 @@ class PostModel {
   final String township; // Township of the property
   final String city; // City of the property
   final String street; // Street of the property
+  final String postalCode; // Postal code of the property
 
   PostModel({
     required this.id,
@@ -35,6 +36,7 @@ class PostModel {
     this.township = '',
     this.city = '',
     this.street = '',
+    this.postalCode = '',
   });
 
   Map<String, dynamic> toMap() {
@@ -56,6 +58,7 @@ class PostModel {
       'township': township,
       'city': city,
       'street': street,
+      'postalCode': postalCode,
     };
   }
 
@@ -98,6 +101,7 @@ class PostModel {
       township: map['township'] ?? '',
       city: map['city'] ?? '',
       street: map['street'] ?? '',
+      postalCode: map['postalCode'] ?? '',
     );
   }
 }

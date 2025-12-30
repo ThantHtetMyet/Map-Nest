@@ -26,6 +26,15 @@ service cloud.firestore {
       // Allow read and write for all users (test mode)
       allow read, write: if true;
     }
+    match /users/{document=**} {
+      // Allow read and write for all users (test mode)
+      // Users can sign up and sign in without Firebase Auth
+      allow read, write: if true;
+    }
+    match /reports/{document=**} {
+      // Allow read and write for all users (test mode)
+      allow read, write: if true;
+    }
   }
 }
 ```

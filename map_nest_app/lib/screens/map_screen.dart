@@ -5,6 +5,8 @@ import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart';
 import '../providers/post_provider.dart';
 import '../providers/theme_provider.dart';
+import '../providers/auth_provider.dart';
+import '../providers/language_provider.dart';
 import '../models/post_model.dart';
 import '../services/location_service.dart';
 import '../widgets/post_marker.dart';
@@ -12,6 +14,7 @@ import '../widgets/current_location_marker.dart';
 import '../widgets/glass_card.dart';
 import 'create_post_screen.dart';
 import 'post_detail_screen.dart';
+import 'sign_in_screen.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -205,94 +208,209 @@ class _MapScreenState extends State<MapScreen> {
                   ],
                 ),
               ),
-              // Theme toggle button at top right corner
-              Positioned(
-                top: 50,
-                left: 16,
-                child: GlassCard(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  borderRadius: 25,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.light_mode,
-                        color: isDark ? Colors.grey[400] : Colors.amber[700],
-                        size: 18,
-                      ),
-                      const SizedBox(width: 8),
-                      Switch(
-                        value: isDark,
-                        onChanged: (value) {
-                          themeProvider.setTheme(value);
-                        },
-                        activeColor: Colors.white,
-                        activeTrackColor: Colors.grey[700],
-                        inactiveThumbColor: Colors.white,
-                        inactiveTrackColor: Colors.grey[400],
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      ),
-                      const SizedBox(width: 8),
-                      Icon(
-                        Icons.dark_mode,
-                        color: isDark ? Colors.indigo[300] : Colors.grey[600],
-                        size: 18,
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             ],
           );
         },
       ),
-      floatingActionButton: GlassCard(
-        padding: EdgeInsets.zero,
-        borderRadius: 30,
-        child: FloatingActionButton.extended(
-          onPressed: () async {
-            final result = await Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => CreatePostScreen(
-                  initialLocation: _currentPosition != null
-                      ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
-                      : null,
-                ),
-              ),
-            );
-            
-            if (result == true) {
-              // Post created successfully - refresh posts
-              final postProvider = Provider.of<PostProvider>(context, listen: false);
-              await postProvider.refreshPosts();
-              
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: const Text('Post created successfully!'),
-                  backgroundColor: Colors.green.withOpacity(0.9),
-                  behavior: SnackBarBehavior.floating,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+      bottomNavigationBar: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.grey[900] : Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: SafeArea(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              // Theme Toggle - Left
+              Expanded(
+                child: Container(
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey[800] : Colors.white,
+                    border: Border(
+                      right: BorderSide(
+                        color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  child: IconButton(
+                    onPressed: () {
+                      themeProvider.setTheme(!isDark);
+                    },
+                    icon: Icon(
+                      isDark ? Icons.dark_mode : Icons.light_mode,
+                      size: 20,
+                      color: isDark ? Colors.blue.shade300 : Colors.orange,
+                    ),
+                    tooltip: isDark ? 'Switch to Light Mode' : 'Switch to Dark Mode',
                   ),
                 ),
-              );
-            }
-          },
-          backgroundColor: Colors.transparent,
-          elevation: 0,
-          label: Text(
-            'Create Post',
-            style: TextStyle(
-              color: isDark ? Colors.white : Colors.black87,
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-            ),
-          ),
-          icon: Icon(
-            Icons.add,
-            color: isDark ? Colors.white : Colors.black87,
-            size: 24,
+              ),
+              // Create Post - Second
+              Expanded(
+                child: Container(
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey[800] : Colors.white,
+                    border: Border(
+                      right: BorderSide(
+                        color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  child: IconButton(
+                    onPressed: () async {
+                      final result = await Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => CreatePostScreen(
+                            initialLocation: _currentPosition != null
+                                ? LatLng(_currentPosition!.latitude, _currentPosition!.longitude)
+                                : null,
+                          ),
+                        ),
+                      );
+                      
+                      if (result == true && mounted) {
+                        // Post created successfully - refresh posts
+                        final postProvider = Provider.of<PostProvider>(context, listen: false);
+                        await postProvider.refreshPosts();
+                        
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('Post created successfully!'),
+                            backgroundColor: Colors.green.withOpacity(0.9),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    icon: Icon(
+                      Icons.add_circle_outline,
+                      size: 20,
+                      color: isDark ? Colors.white : Colors.grey[800],
+                    ),
+                    tooltip: 'Create Post',
+                  ),
+                ),
+              ),
+              // Language Selection - Third
+              Expanded(
+                child: Container(
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey[800] : Colors.white,
+                    border: Border(
+                      right: BorderSide(
+                        color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                        width: 1,
+                      ),
+                    ),
+                  ),
+                  child: Consumer<LanguageProvider>(
+                    builder: (context, languageProvider, child) {
+                      return IconButton(
+                        onPressed: () {
+                          languageProvider.toggleLanguage();
+                        },
+                        icon: Text(
+                          languageProvider.currentLanguage == 'my' ? '🇲🇲' : '🇬🇧',
+                          style: const TextStyle(fontSize: 20),
+                        ),
+                        tooltip: languageProvider.displayLanguage,
+                      );
+                    },
+                  ),
+                ),
+              ),
+              // Sign Out - Right
+              Expanded(
+                child: Container(
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.grey[800] : Colors.white,
+                  ),
+                  child: Consumer<AuthProvider>(
+                    builder: (context, authProvider, child) {
+                      return IconButton(
+                        onPressed: () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (context) {
+                              final themeProvider = Provider.of<ThemeProvider>(context);
+                              final isDarkDialog = themeProvider.isDarkMode;
+                              return AlertDialog(
+                                backgroundColor: isDarkDialog ? Colors.grey[800] : Colors.white,
+                                title: Text(
+                                  'Sign Out',
+                                  style: TextStyle(
+                                    color: isDarkDialog ? Colors.white : Colors.grey[900],
+                                  ),
+                                ),
+                                content: Text(
+                                  'Are you sure you want to sign out?',
+                                  style: TextStyle(
+                                    color: isDarkDialog ? Colors.grey[300] : Colors.grey[700],
+                                  ),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context, false),
+                                    child: Text(
+                                      'Cancel',
+                                      style: TextStyle(
+                                        color: isDarkDialog ? Colors.grey[400] : Colors.grey[600],
+                                      ),
+                                    ),
+                                  ),
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context, true),
+                                    child: const Text(
+                                      'Sign Out',
+                                      style: TextStyle(color: Colors.red),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          );
+                          
+                          if (confirm == true && mounted) {
+                            await authProvider.signOut();
+                            if (mounted) {
+                              Navigator.of(context).pushAndRemoveUntil(
+                                MaterialPageRoute(
+                                  builder: (context) => const SignInScreen(),
+                                ),
+                                (route) => false,
+                              );
+                            }
+                          }
+                        },
+                        icon: Icon(
+                          Icons.logout,
+                          size: 20,
+                          color: isDark ? Colors.white : Colors.grey[800],
+                        ),
+                        tooltip: 'Sign Out',
+                      );
+                    },
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),
