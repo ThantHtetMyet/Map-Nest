@@ -17,6 +17,8 @@ class PostModel {
   final String city; // City of the property
   final String street; // Street of the property
   final String postalCode; // Postal code of the property
+  final String createdBy; // User ID of the user who created the post
+  final int isDeleted; // Soft delete flag: 0 = not deleted, 1 = deleted
 
   PostModel({
     required this.id,
@@ -37,6 +39,8 @@ class PostModel {
     this.city = '',
     this.street = '',
     this.postalCode = '',
+    this.createdBy = '',
+    this.isDeleted = 0,
   });
 
   Map<String, dynamic> toMap() {
@@ -59,6 +63,8 @@ class PostModel {
       'city': city,
       'street': street,
       'postalCode': postalCode,
+      'createdBy': createdBy,
+      'isDeleted': isDeleted,
     };
   }
 
@@ -102,6 +108,8 @@ class PostModel {
       city: map['city'] ?? '',
       street: map['street'] ?? '',
       postalCode: map['postalCode'] ?? '',
+      createdBy: map['createdBy'] ?? '',
+      isDeleted: map['isDeleted'] ?? 0,
     );
   }
 }

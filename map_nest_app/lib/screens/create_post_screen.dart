@@ -8,7 +8,7 @@ import 'package:http/http.dart' as http;
 import '../models/post_model.dart';
 import '../providers/post_provider.dart';
 import '../providers/theme_provider.dart';
-import '../services/firestore_service.dart';
+import '../providers/auth_provider.dart';
 import '../services/location_service.dart';
 import '../services/image_upload_service.dart';
 import '../widgets/glass_card.dart';
@@ -39,12 +39,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
   final _streetController = TextEditingController();
   final _postalCodeController = TextEditingController();
   final LocationService _locationService = LocationService();
-  final FirestoreService _firestoreService = FirestoreService();
   final ImagePicker _imagePicker = ImagePicker();
-  final ImageUploadService _imageUploadService = ImageUploadService();
 
-  List<File> _selectedImages = [];
-  List<TextEditingController> _phoneNumberControllers = [TextEditingController()]; // Start with one phone number
+  final List<File> _selectedImages = [];
+  final List<TextEditingController> _phoneNumberControllers = [TextEditingController()]; // Start with one phone number
   LatLng? _selectedLocation;
   bool _isSubmitting = false;
   String _loadingStatus = 'Preparing...';
@@ -231,7 +229,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               leading: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
+                  color: Colors.blue.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.camera_alt, color: Colors.blue),
@@ -246,7 +244,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
               leading: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.purple.withOpacity(0.1),
+                  color: Colors.purple.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Icon(Icons.photo_library, color: Colors.purple),
@@ -321,7 +319,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       }
 
       // Approach 2: Try with "Singapore" in query
-      if (data == null || data!.isEmpty) {
+      if (data == null || data.isEmpty) {
         try {
           final encodedQuery = Uri.encodeComponent('Singapore $cleanPostalCode');
           final url2 = Uri.parse(
@@ -357,7 +355,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       }
 
       // Approach 3: Try with original postal code format (with S prefix if it was there)
-      if (data == null || data!.isEmpty) {
+      if (data == null || data.isEmpty) {
         try {
           final encodedOriginal = Uri.encodeComponent(postalCode);
           final url3 = Uri.parse(
@@ -383,7 +381,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       }
 
       // Approach 4: General search with postal code
-      if (data == null || data!.isEmpty) {
+      if (data == null || data.isEmpty) {
         try {
           final encodedSearch = Uri.encodeComponent('$postalCode Singapore');
           final url4 = Uri.parse(
@@ -522,6 +520,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
 
       // Validate dropdowns
       if (_selectedType == null || _selectedType!.isEmpty) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Please select Rent or Sold'),
@@ -535,6 +534,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
       }
 
       if (_selectedPropertyType == null || _selectedPropertyType!.isEmpty) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Please select Property Type'),
@@ -552,6 +552,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           (_selectedPropertyType == 'Apartment(Condo)' ||
               _selectedPropertyType == 'Apartment(HDB)')) {
         if (!_isWholeApartment && !_hasMasterRoom && !_hasCommonRoom) {
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Please select at least one option: Whole Apartment, Master Room, or Common Room'),
@@ -572,6 +573,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
           .toList();
 
       if (phoneNumbers.isEmpty) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Please enter at least one contact number'),
@@ -583,6 +585,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         });
         return;
       }
+
+      // Get current user ID
+      if (!mounted) return;
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final currentUserId = authProvider.user?.userId ?? '';
 
       // Create post model
       final post = PostModel(
@@ -604,15 +611,19 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
         city: _cityController.text.trim(),
         street: _streetController.text.trim(),
         postalCode: _postalCodeController.text.trim(),
+        createdBy: currentUserId,
+        isDeleted: 0,
       );
 
       // Save post
+      if (!mounted) return;
       setState(() {
         _loadingStatus = 'Saving post...';
       });
       final postProvider = Provider.of<PostProvider>(context, listen: false);
       final success = await postProvider.createPost(post);
       
+      if (!mounted) return;
       setState(() {
         _loadingStatus = 'Almost done...';
       });
@@ -749,38 +760,41 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
     return Scaffold(
       backgroundColor: isDark ? Colors.grey[900] : Colors.grey[100],
       body: SafeArea(
-        child: Column(
+        child: Stack(
           children: [
-            // Fixed Title at Top
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-              decoration: BoxDecoration(
-                color: isDark ? Colors.grey[900] : Colors.grey[100],
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 4,
-                    offset: const Offset(0, 2),
+            Column(
+              children: [
+                // Fixed Title at Top - Hide when submitting
+                if (!_isSubmitting)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.grey[900] : Colors.grey[100],
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.1),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: Text(
+                        'Create New Post',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black87,
+                          letterSpacing: 0.5,
+                        ),
+                      ),
+                    ),
                   ),
-                ],
-              ),
-              child: Center(
-                child: Text(
-                  'Create New Post',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: isDark ? Colors.white : Colors.black87,
-                    letterSpacing: 0.5,
-                  ),
-                ),
-              ),
-            ),
-            // Scrollable Content
-            Expanded(
-              child: Stack(
-                children: [
+                // Scrollable Content
+                Expanded(
+                  child: Stack(
+                    children: [
                   Form(
                     key: _formKey,
                     child: SingleChildScrollView(
@@ -836,7 +850,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                 ),
                                 filled: true,
                                 fillColor: isDark
-                                    ? Colors.white.withOpacity(0.1)
+                                    ? Colors.white.withValues(alpha: 0.1)
                                     : Colors.grey[50],
                               ),
                               validator: (value) {
@@ -928,7 +942,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                               ),
                                               filled: true,
                                               fillColor: isDark
-                                                  ? Colors.white.withOpacity(0.1)
+                                                  ? Colors.white.withValues(alpha: 0.1)
                                                   : Colors.grey[50],
                                             ),
                                             keyboardType: TextInputType.phone,
@@ -958,7 +972,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                       ],
                                     ),
                                   );
-                                }).toList(),
+                                }),
                               ],
                             ),
                           ),
@@ -978,7 +992,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                           // Rent/Sold Dropdown
                           GlassCard(
                             child: DropdownButtonFormField<String>(
-                              value: _selectedType,
+                              initialValue: _selectedType,
                               style: TextStyle(
                                 color: isDark ? Colors.white : Colors.black87,
                                 fontSize: 16,
@@ -1007,7 +1021,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                 ),
                                 filled: true,
                                 fillColor: isDark
-                                    ? Colors.white.withOpacity(0.1)
+                                    ? Colors.white.withValues(alpha: 0.1)
                                     : Colors.grey[50],
                               ),
                               dropdownColor: isDark ? Colors.grey[800] : Colors.white,
@@ -1041,7 +1055,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                           // Property Type Dropdown
                           GlassCard(
                             child: DropdownButtonFormField<String>(
-                              value: _selectedPropertyType,
+                              initialValue: _selectedPropertyType,
                               isExpanded: true,
                               style: TextStyle(
                                 color: isDark ? Colors.white : Colors.black87,
@@ -1071,7 +1085,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                 ),
                                 filled: true,
                                 fillColor: isDark
-                                    ? Colors.white.withOpacity(0.1)
+                                    ? Colors.white.withValues(alpha: 0.1)
                                     : Colors.grey[50],
                               ),
                               dropdownColor: isDark ? Colors.grey[800] : Colors.white,
@@ -1243,7 +1257,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                             ),
                                             filled: true,
                                             fillColor: isDark
-                                                ? Colors.white.withOpacity(0.1)
+                                                ? Colors.white.withValues(alpha: 0.1)
                                                 : Colors.grey[50],
                                           ),
                                           keyboardType: TextInputType.number,
@@ -1310,7 +1324,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                             ),
                                             filled: true,
                                             fillColor: isDark
-                                                ? Colors.white.withOpacity(0.1)
+                                                ? Colors.white.withValues(alpha: 0.1)
                                                 : Colors.grey[50],
                                           ),
                                           keyboardType: TextInputType.number,
@@ -1369,7 +1383,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                   ),
                                   filled: true,
                                   fillColor: isDark
-                                      ? Colors.white.withOpacity(0.1)
+                                      ? Colors.white.withValues(alpha: 0.1)
                                       : Colors.grey[50],
                                 ),
                                 keyboardType: TextInputType.number,
@@ -1413,7 +1427,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                   ),
                                   filled: true,
                                   fillColor: isDark
-                                      ? Colors.white.withOpacity(0.1)
+                                      ? Colors.white.withValues(alpha: 0.1)
                                       : Colors.grey[50],
                                 ),
                                 keyboardType: TextInputType.number,
@@ -1458,7 +1472,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                 ),
                                 filled: true,
                                 fillColor: isDark
-                                    ? Colors.white.withOpacity(0.1)
+                                    ? Colors.white.withValues(alpha: 0.1)
                                     : Colors.grey[50],
                               ),
                               maxLines: 2,
@@ -1506,7 +1520,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                     ),
                                     filled: true,
                                     fillColor: isDark
-                                        ? Colors.white.withOpacity(0.1)
+                                        ? Colors.white.withValues(alpha: 0.1)
                                         : Colors.grey[50],
                                   ),
                                   keyboardType: TextInputType.text,
@@ -1555,7 +1569,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                 ),
                                 filled: true,
                                 fillColor: isDark
-                                    ? Colors.white.withOpacity(0.1)
+                                    ? Colors.white.withValues(alpha: 0.1)
                                     : Colors.grey[50],
                               ),
                             ),
@@ -1598,7 +1612,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                 ),
                                 filled: true,
                                 fillColor: isDark
-                                    ? Colors.white.withOpacity(0.1)
+                                    ? Colors.white.withValues(alpha: 0.1)
                                     : Colors.grey[50],
                               ),
                             ),
@@ -1641,7 +1655,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                 ),
                                 filled: true,
                                 fillColor: isDark
-                                    ? Colors.white.withOpacity(0.1)
+                                    ? Colors.white.withValues(alpha: 0.1)
                                     : Colors.grey[50],
                               ),
                             ),
@@ -1684,7 +1698,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                 ),
                                 filled: true,
                                 fillColor: isDark
-                                    ? Colors.white.withOpacity(0.1)
+                                    ? Colors.white.withValues(alpha: 0.1)
                                     : Colors.grey[50],
                               ),
                               maxLines: 3,
@@ -1739,7 +1753,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                 ),
                                 filled: true,
                                 fillColor: isDark
-                                    ? Colors.white.withOpacity(0.1)
+                                    ? Colors.white.withValues(alpha: 0.1)
                                     : Colors.grey[50],
                               ),
                               keyboardType: TextInputType.number,
@@ -1778,7 +1792,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                           borderRadius: BorderRadius.circular(10),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.pink.withOpacity(0.3),
+                                              color: Colors.pink.withValues(alpha: 0.3),
                                               blurRadius: 8,
                                               offset: const Offset(0, 4),
                                             ),
@@ -1938,7 +1952,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                         borderRadius: BorderRadius.circular(10),
                                         boxShadow: [
                                           BoxShadow(
-                                            color: Colors.orange.withOpacity(0.3),
+                                            color: Colors.orange.withValues(alpha: 0.3),
                                             blurRadius: 8,
                                             offset: const Offset(0, 4),
                                           ),
@@ -2055,7 +2069,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                           borderRadius: BorderRadius.circular(12),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.blue.withOpacity(0.3),
+                                              color: Colors.blue.withValues(alpha: 0.3),
                                               blurRadius: 8,
                                               offset: const Offset(0, 4),
                                             ),
@@ -2066,11 +2080,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                           child: InkWell(
                                             onTap: _getCurrentLocation,
                                             borderRadius: BorderRadius.circular(12),
-                                            child: Padding(
-                                              padding: const EdgeInsets.symmetric(vertical: 14),
+                                            child: const Padding(
+                                              padding: EdgeInsets.symmetric(vertical: 14),
                                               child: Row(
                                                 mainAxisAlignment: MainAxisAlignment.center,
-                                                children: const [
+                                                children: [
                                                   Icon(Icons.my_location, color: Colors.white, size: 18),
                                                   SizedBox(width: 4),
                                                   Flexible(
@@ -2104,7 +2118,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                           borderRadius: BorderRadius.circular(12),
                                           boxShadow: [
                                             BoxShadow(
-                                              color: Colors.purple.withOpacity(0.3),
+                                              color: Colors.purple.withValues(alpha: 0.3),
                                               blurRadius: 8,
                                               offset: const Offset(0, 4),
                                             ),
@@ -2130,11 +2144,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                               }
                                             },
                                             borderRadius: BorderRadius.circular(12),
-                                            child: Padding(
-                                              padding: const EdgeInsets.symmetric(vertical: 14),
+                                            child: const Padding(
+                                              padding: EdgeInsets.symmetric(vertical: 14),
                                               child: Row(
                                                 mainAxisAlignment: MainAxisAlignment.center,
-                                                children: const [
+                                                children: [
                                                   Icon(Icons.map, color: Colors.white, size: 18),
                                                   SizedBox(width: 4),
                                                   Flexible(
@@ -2175,7 +2189,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                     borderRadius: BorderRadius.circular(12),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: (_isGeocodingPostalCode ? Colors.grey : Colors.orange).withOpacity(0.3),
+                                        color: (_isGeocodingPostalCode ? Colors.grey : Colors.orange).withValues(alpha: 0.3),
                                         blurRadius: 8,
                                         offset: const Offset(0, 4),
                                       ),
@@ -2240,7 +2254,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                     borderRadius: BorderRadius.circular(16),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.grey.withOpacity(0.4),
+                                        color: Colors.grey.withValues(alpha: 0.4),
                                         blurRadius: 12,
                                         offset: const Offset(0, 6),
                                       ),
@@ -2251,12 +2265,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                     child: InkWell(
                                       onTap: _showCancelConfirmationDialog,
                                       borderRadius: BorderRadius.circular(16),
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 8),
+                                      child: const Padding(
+                                        padding: EdgeInsets.symmetric(vertical: 16, horizontal: 8),
                                         child: Row(
                                           mainAxisAlignment: MainAxisAlignment.center,
                                           mainAxisSize: MainAxisSize.min,
-                                          children: const [
+                                          children: [
                                             Icon(
                                               Icons.cancel_outlined,
                                               color: Colors.white,
@@ -2295,7 +2309,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                     borderRadius: BorderRadius.circular(16),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.green.withOpacity(0.4),
+                                        color: Colors.green.withValues(alpha: 0.4),
                                         blurRadius: 12,
                                         offset: const Offset(0, 6),
                                       ),
@@ -2313,12 +2327,12 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                           mainAxisSize: MainAxisSize.min,
                                           children: [
                                             if (_isSubmitting) ...[
-                                              SizedBox(
+                                              const SizedBox(
                                                 height: 18,
                                                 width: 18,
                                                 child: CircularProgressIndicator(
                                                   strokeWidth: 2.5,
-                                                  valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
+                                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                                                 ),
                                               ),
                                               const SizedBox(width: 8),
@@ -2366,22 +2380,24 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                       ),
                     ),
                   ),
-                  // Beautiful Loading Overlay
-                  if (_isSubmitting)
-                    Material(
-                      color: Colors.black.withOpacity(0.75),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                            colors: [
-                              Colors.black.withOpacity(0.8),
-                              Colors.black.withOpacity(0.6),
-                            ],
-                          ),
-                        ),
-                        child: Center(
+            // Beautiful Loading Overlay - Full screen when submitting
+            if (_isSubmitting)
+              Material(
+                color: Colors.black.withValues(alpha: 0.9),
+                child: Container(
+                  width: double.infinity,
+                  height: double.infinity,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        Colors.black.withValues(alpha: 0.9),
+                        Colors.black.withValues(alpha: 0.8),
+                      ],
+                    ),
+                  ),
+                  child: Center(
                           child: GlassCard(
                             child: Container(
                               padding: const EdgeInsets.all(40),
@@ -2408,7 +2424,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                               shape: BoxShape.circle,
                                               boxShadow: [
                                                 BoxShadow(
-                                                  color: Colors.green.withOpacity(0.3 * (1 - pulseValue)),
+                                                  color: Colors.green.withValues(alpha: 0.3 * (1 - pulseValue)),
                                                   blurRadius: 30,
                                                   spreadRadius: 10,
                                                 ),
@@ -2433,7 +2449,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                                 shape: BoxShape.circle,
                                                 boxShadow: [
                                                   BoxShadow(
-                                                    color: Colors.green.withOpacity(0.5),
+                                                    color: Colors.green.withValues(alpha: 0.5),
                                                     blurRadius: 20,
                                                     spreadRadius: 5,
                                                   ),
@@ -2504,7 +2520,7 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                                   borderRadius: BorderRadius.circular(10),
                                                   boxShadow: [
                                                     BoxShadow(
-                                                      color: Colors.green.withOpacity(0.6),
+                                                      color: Colors.green.withValues(alpha: 0.6),
                                                       blurRadius: 10,
                                                       spreadRadius: 2,
                                                     ),
@@ -2538,11 +2554,11 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                                               width: 14,
                                               height: 14,
                                               decoration: BoxDecoration(
-                                                color: Colors.green.shade400.withOpacity(opacity),
+                                                color: Colors.green.shade400.withValues(alpha: opacity),
                                                 shape: BoxShape.circle,
                                                 boxShadow: [
                                                   BoxShadow(
-                                                    color: Colors.green.withOpacity(opacity * 0.5),
+                                                    color: Colors.green.withValues(alpha: opacity * 0.5),
                                                     blurRadius: 8,
                                                     spreadRadius: 2,
                                                   ),
@@ -2561,8 +2577,10 @@ class _CreatePostScreenState extends State<CreatePostScreen> {
                         ),
                       ),
                     ),
-                ],
+                  ],
+                ),
               ),
+            ],
             ),
           ],
         ),
